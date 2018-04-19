@@ -76,7 +76,7 @@ class DMN(BaseModel):
                     else:
                         # ReLU update
                         c = episode.new(memory)
-                        concated = tf.concat(1, [memory, c, question_vec])
+                        concated = tf.concat([memory, c, question_vec], 1)
 
                         w_t = weight('w_t', [3 * d, d])
                         z = tf.matmul(concated, w_t)
@@ -101,7 +101,7 @@ class DMN(BaseModel):
 
         with tf.name_scope('Loss'):
             # Cross-Entropy loss
-            cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, answer)
+            cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels = answer, logits = logits)
             loss = tf.reduce_mean(cross_entropy)
             total_loss = loss + params.weight_decay * tf.add_n(tf.get_collection('l2'))
 

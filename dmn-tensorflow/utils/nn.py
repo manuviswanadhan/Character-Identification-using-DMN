@@ -58,7 +58,7 @@ def batch_norm(x, is_training):
     :param is_training: boolean tf.Variable, true indicates training phase
     :return: batch-normalized tensor
     """
-    with tf.variable_scope('BatchNorm', reuse=False):
+    with tf.variable_scope('BatchNorm', reuse=tf.AUTO_REUSE):
         # calculate dimensions (from tf.contrib.layers.batch_norm)
         inputs_shape = x.get_shape()
         axis = list(range(len(inputs_shape) - 1))
@@ -73,6 +73,7 @@ def batch_norm(x, is_training):
             ema_apply_op = ema.apply([batch_mean, batch_var])
             with tf.control_dependencies([ema_apply_op]):
                 return tf.identity(batch_mean), tf.identity(batch_var)
+
 
         mean, var = tf.cond(is_training,
                             mean_var_with_update,
