@@ -58,28 +58,36 @@ def batch_norm(x, is_training):
     :param is_training: boolean tf.Variable, true indicates training phase
     :return: batch-normalized tensor
     """
-    with tf.variable_scope('BatchNorm', reuse=tf.AUTO_REUSE):
+    #with tf.variable_scope('BatchNorm'):
         # calculate dimensions (from tf.contrib.layers.batch_norm)
-        inputs_shape = x.get_shape()
-        axis = list(range(len(inputs_shape) - 1))
-        param_shape = inputs_shape[-1:]
+        # inputs_shape = x.get_shape()
+        # axis = list(range(len(inputs_shape) - 1))
+        # param_shape = inputs_shape[-1:]
 
-        beta = tf.get_variable('beta', param_shape, initializer=tf.constant_initializer(0.))
-        gamma = tf.get_variable('gamma', param_shape, initializer=tf.constant_initializer(1.))
-        batch_mean, batch_var = tf.nn.moments(x, axis)
-        ema = tf.train.ExponentialMovingAverage(decay=0.5)
+        # beta = tf.get_variable('beta', param_shape, initializer=tf.constant_initializer(0.))
+        # gamma = tf.get_variable('gamma', param_shape, initializer=tf.constant_initializer(1.))
+        # batch_mean, batch_var = tf.nn.moments(x, axis)
+        # ema = tf.train.ExponentialMovingAverage(decay=0.5)
 
-        def mean_var_with_update():
-            ema_apply_op = ema.apply([batch_mean, batch_var])
-            with tf.control_dependencies([ema_apply_op]):
-                return tf.identity(batch_mean), tf.identity(batch_var)
+        # def mean_var_with_update():
+        #     ema_apply_op = ema.apply([batch_mean, batch_var])
+        #     with tf.control_dependencies([ema_apply_op]):
+        #         return tf.identity(batch_mean), tf.identity(batch_var)
 
 
-        mean, var = tf.cond(is_training,
-                            mean_var_with_update,
-                            lambda: (ema.average(batch_mean), ema.average(batch_var)))
-        normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, 1e-3)
-    return normed
+        # mean, var = tf.cond(is_training,
+        #                     mean_var_with_update,
+        #                     lambda: (ema.average(batch_mean), ema.average(batch_var)))
+        # normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, 1e-3)
+
+    scope_bn = 'BatchNorm'
+    activation = None
+    return tf.cond(is_training, 
+        lambda: tf.contrib.layers.batch_norm(x, activation_fn=activation, center=True, scale=True,
+        updates_collections=None,is_training=True, reuse=None,scope=scope_bn,decay=0.9, epsilon=1e-5),
+        lambda: tf.contrib.layers.batch_norm(x, activation_fn =activation, center=True, scale=True,
+        updates_collections=None,is_training=False, reuse=True,scope=scope_bn,decay=0.9, epsilon=1e-5))
+    #return normed
 
 
 def dropout(x, keep_prob, is_training):
@@ -94,7 +102,7 @@ def dropout(x, keep_prob, is_training):
 
 def conv(x, filter, is_training):
     l = tf.nn.conv2d(x, filter, strides=[1, 1, 1, 1], padding='SAME')
-    l = batch_norm(l, is_training)
+    #l = batch_norm(l, is_training)
     return tf.nn.relu(l)
 
 
@@ -106,5 +114,5 @@ def fully_connected(input, num_neurons, name, is_training):
     input_size = input.get_shape()[1]
     w = weight(name, [input_size, num_neurons], init='he')
     l = tf.matmul(input, w)
-    l = batch_norm(l, is_training)
+    #l = batch_norm(l, is_training)
     return tf.nn.relu(l)
