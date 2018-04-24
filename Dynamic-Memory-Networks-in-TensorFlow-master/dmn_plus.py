@@ -12,7 +12,7 @@ from attention_gru_cell import AttentionGRUCell
 
 from tensorflow.contrib.cudnn_rnn.python.ops import cudnn_rnn_ops
 
-import babi_input
+import test_input
 
 class Config(object):
     """Holds model hyperparams and data information."""
@@ -43,7 +43,7 @@ class Config(object):
     num_attention_features = 4
 
     max_allowed_inputs = 130
-    num_train = 9000
+    num_train = 3000 ######## COnfigurable
 
     floatX = np.float32
 
@@ -80,9 +80,9 @@ class DMN_PLUS(object):
     def load_data(self, debug=False):
         """Loads train/valid/test data and sentence encoding"""
         if self.config.train_mode:
-            self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size = babi_input.load_babi(self.config, split_sentences=True)
+            self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size = test_input.load_babi(self.config, split_sentences=True)
         else:
-            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size = babi_input.load_babi(self.config, split_sentences=True)
+            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size = test_input.load_babi(self.config, split_sentences=True)
         self.encoding = _position_encoding(self.max_sen_len, self.config.embed_size)
 
     def add_placeholders(self):
@@ -273,12 +273,14 @@ class DMN_PLUS(object):
 
 
     def run_epoch(self, session, data, num_epoch=0, train_writer=None, train_op=None, verbose=2, train=False):
+        print(len(data[0]))
         config = self.config
         dp = config.dropout
         if train_op is None:
             train_op = tf.no_op()
             dp = 1
         total_steps = len(data[0]) // config.batch_size
+        print (str(total_steps)+" "+str(config.batch_size))
         total_loss = []
         accuracy = 0
 
@@ -288,6 +290,9 @@ class DMN_PLUS(object):
         qp, ip, ql, il, im, a = qp[p], ip[p], ql[p], il[p], im[p], a[p]
 
         for step in range(total_steps):
+            # print("here")
+            # print(total_steps)
+            # print(step)
             index = range(step*config.batch_size,(step+1)*config.batch_size)
             feed = {self.question_placeholder: qp[index],
                   self.input_placeholder: ip[index],
@@ -307,14 +312,17 @@ class DMN_PLUS(object):
 
             total_loss.append(loss)
             if verbose and step % verbose == 0:
-                sys.stdout.write('\r{} / {} : loss = {}'.format(
+                #sys.stdout.write('\r{} / {} : loss = {}'.format(
+                print('\r{} / {} : loss = {}'.format(
                   step, total_steps, np.mean(total_loss)))
-                sys.stdout.flush()
+                #sys.stdout.flush()
 
 
         if verbose:
-            sys.stdout.write('\r')
+            #sys.stdout.write('\r')
+            print('\r')
 
+        # print("*****"+str(total_steps))
         return np.mean(total_loss), accuracy/float(total_steps)
 
 

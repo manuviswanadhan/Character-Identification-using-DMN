@@ -80,6 +80,7 @@ for run in range(num_runs):
             train_loss, train_accuracy = model.run_epoch(
                 session, model.train, epoch, train_writer,
                 train_op=model.train_step, train=True)
+            print("Validation Acc")
             valid_loss, valid_accuracy = model.run_epoch(session, model.valid)
             print('Training loss: {}'.format(train_loss))
             print('Validation loss: {}'.format(valid_loss))
