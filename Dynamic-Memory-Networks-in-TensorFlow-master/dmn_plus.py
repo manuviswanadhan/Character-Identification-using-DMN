@@ -82,7 +82,7 @@ class DMN_PLUS(object):
         if self.config.train_mode:
             self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab = test_input.load_babi(self.config, split_sentences=True)
         else:
-            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size = test_input.load_babi(self.config, split_sentences=True)
+            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab = test_input.load_babi(self.config, split_sentences=True)
         self.encoding = _position_encoding(self.max_sen_len, self.config.embed_size)
 
     def add_placeholders(self):
@@ -226,6 +226,9 @@ class DMN_PLUS(object):
         attentions = tf.nn.softmax(attentions)
         attentions = tf.expand_dims(attentions, axis=-1)
 
+        print("hello")
+        print(fact_vecs, attentions)
+        print("done")
         reuse = True if hop_index > 0 else False
 
         # concatenate fact vectors and attentions for input into attGRU
@@ -237,7 +240,9 @@ class DMN_PLUS(object):
                     dtype=np.float32,
                     sequence_length=self.input_len_placeholder
             )
-
+        
+        # episode = fact_vecs * attentions
+        print(episode)
         return episode
 
     def add_answer_module(self, rnn_output, q_vec):
@@ -330,12 +335,21 @@ class DMN_PLUS(object):
 
             answers = a[step*config.batch_size:(step+1)*config.batch_size]
             accuracy += np.sum(pred == answers)/float(len(answers))
-            # if(num_epoch == self.max_epochs-1) :
-            #     print(tf.shape(pred), tf.shape(answers))
-            #     for i,a in enumerate(answers) :
-            #         print("test") 
-            #         print(pred[i],a)
-            #         print(self.ivocab[pred[i]], self.ivocab[a])
+            if(train == False) :
+                # for i,ans in enumerate(answers) :
+                #     if(self.ivocab[int(qp[i][0])] == "joseph"):
+                #     print("######", self.ivocab[int(qp[i][0])], self.ivocab[ans])
+                print("ivocab size = ", len(self.ivocab))
+                print(tf.shape(pred), tf.shape(answers))
+                for i,ans in enumerate(answers) :
+                    print("#####") 
+                    # print(pred[i],ans)
+                    print("Question : " + self.ivocab[int(qp[i][0])])
+                    print("Answer given: "+ self.ivocab[pred[i]] + "\t Correct Answer: "+ self.ivocab[ans])
+                    print("Entry number: "+ str(p[step*config.batch_size+i]))
+                    # print("Input", ip[i])
+                    #print(self.ivocab[int(qp[i][0])],self.ivocab[pred[i]], self.ivocab[ans], p[step*config.batch_size+i])
+                    print("__________")
             summ = tf.Summary()
             summ.value.add(tag='accuracy',simple_value=accuracy)
             #tf.summary.scalar('accuracy', accuracy)
@@ -349,9 +363,9 @@ class DMN_PLUS(object):
                   step, total_steps, np.mean(total_loss)))
                 #sys.stdout.flush()
 
-        variables_names = [v.name for v in tf.trainable_variables()]
-        for k in variables_names:
-            print ("Variable: ", k)
+        # variables_names = [v.name for v in tf.trainable_variables()]
+        # for k in variables_names:
+        #     print ("Variable: ", k)
 
         if verbose:
             #sys.stdout.write('\r')

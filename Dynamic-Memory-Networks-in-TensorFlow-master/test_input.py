@@ -36,8 +36,20 @@ def init_babi(fname):
                         if(len(c) == 3):
                             task["C"] = sentence
                             #print("hello" , token[c[0]])
+                            #task["Q"] = ' '.join(word for word in token[c[0]:c[1]])
                             task["Q"] = token[c[0]]
                             task["A"] = c[2]
+                            # # if(token[c[0]] == "Joseph") :
+                            # print("________________")
+                            # print(str(len(tasks)))
+                            # print("task[C]")
+                            # print(task["C"])
+                            # print("question: "+ task["Q"] + " \nanswer: " + task["A"])
+                            # print("C = ")
+                            # print(c)
+                            # print("token = ")
+                            # print(token)
+                            # print("^^^^^^^^^^^^^^")
                             tasks.append(copy.deepcopy(task))
     return tasks
 
@@ -277,4 +289,4 @@ def load_babi(config, split_sentences=False):
 
     else:
         test = questions, inputs, q_lens, input_lens, input_masks, answers
-        return test, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab)
+        return test, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab
