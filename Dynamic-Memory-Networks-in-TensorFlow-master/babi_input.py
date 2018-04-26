@@ -21,7 +21,6 @@ def init_babi(fname):
             task = {"C": "", "Q": "", "A": "", "S": ""} 
             counter = 0
             id_map = {}
-            a
         line = line.strip()
         line = line.replace('.', ' . ')
         line = line[line.find(' ')+1:]
@@ -40,7 +39,8 @@ def init_babi(fname):
             for num in tmp[2].split():
                 task["S"].append(id_map[int(num.strip())])
             tasks.append(task.copy())
-
+    # print(tasks)
+    # print("printed tasks")
     return tasks
 
 
@@ -112,7 +112,6 @@ def load_glove(dim):
     
     return word2vec
 
-a
 def create_vector(word, word2vec, word_vector_size, silent=True):
     # if the word is missing from Glove, create some fake vector and store in glove!
     vector = np.random.uniform(0.0,1.0,(word_vector_size,))
@@ -142,6 +141,8 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
     answers = []
     input_masks = []
     for x in data_raw:
+        print ("single x")
+        print(x)
         if split_sentences:
             inp = x["C"].lower().split(' . ') 
             inp = [w for w in inp if len(w) > 0]
@@ -174,6 +175,8 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
                                     ivocab = ivocab, 
                                     word_vector_size = embed_size, 
                                     to_return = "index") for w in q]
+        print(inp)
+        print (inp_vector)
         
         if split_sentences:
             inputs.append(inp_vector)
@@ -268,6 +271,7 @@ def load_babi(config, split_sentences=False):
 
     print('==> get train inputs')
     train_data = process_input(babi_train_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
+        #train data has (inputs, questions, answers, input_masks), with inputs having concatenation of [[word idxs of sentences] of scene]
     print('==> get test inputs')
     test_data = process_input(babi_test_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
 

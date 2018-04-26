@@ -12,7 +12,7 @@ from attention_gru_cell import AttentionGRUCell
 
 from tensorflow.contrib.cudnn_rnn.python.ops import cudnn_rnn_ops
 
-import test_input
+import test_input as test_input
 
 class Config(object):
     """Holds model hyperparams and data information."""
@@ -80,7 +80,7 @@ class DMN_PLUS(object):
     def load_data(self, debug=False):
         """Loads train/valid/test data and sentence encoding"""
         if self.config.train_mode:
-            self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size = test_input.load_babi(self.config, split_sentences=True)
+            self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab = test_input.load_babi(self.config, split_sentences=True)
         else:
             self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size = test_input.load_babi(self.config, split_sentences=True)
         self.encoding = _position_encoding(self.max_sen_len, self.config.embed_size)
@@ -134,22 +134,28 @@ class DMN_PLUS(object):
         """Get question vectors via embedding and GRU"""
         questions = tf.nn.embedding_lookup(self.embeddings, self.question_placeholder)
 
-        gru_cell = tf.contrib.rnn.GRUCell(self.config.hidden_size)
+        gru_cell = tf.contrib.rnn.GRUCell(self.config.hidden_size) # hidden size gives the memory of the cell
         _, q_vec = tf.nn.dynamic_rnn(gru_cell,
                 questions,
                 dtype=np.float32,
                 sequence_length=self.question_len_placeholder
         )
-
+        # print(self.question_placeholder)
+        # print(q_vec)
+        # print(s)
         return q_vec
 
     def get_input_representation(self):
         """Get fact (sentence) vectors via embedding, positional encoding and bi-directional GRU"""
         # get word vectors from embedding
         inputs = tf.nn.embedding_lookup(self.embeddings, self.input_placeholder)
+        
+        # print(inputs)
+        # print(self.encoding.shape)
 
         # use encoding to get sentence representation
         inputs = tf.reduce_sum(inputs * self.encoding, 2)
+        # print(inputs)
 
         forward_gru_cell = tf.contrib.rnn.GRUCell(self.config.hidden_size)
         backward_gru_cell = tf.contrib.rnn.GRUCell(self.config.hidden_size)
@@ -163,32 +169,48 @@ class DMN_PLUS(object):
 
         # sum forward and backward output vectors
         fact_vecs = tf.reduce_sum(tf.stack(outputs), axis=0)
+        # print("Manu")
+        # print(self.input_placeholder)
+        # print(inputs)
+        # print(outputs)
+        # print(fact_vecs)
+        # print(s)
 
         # apply dropout
         fact_vecs = tf.nn.dropout(fact_vecs, self.dropout_placeholder)
 
         return fact_vecs
 
-    def get_attention(self, q_vec, prev_memory, fact_vec, reuse):
+    def get_attention(self, q_vec, prev_memory, fact_vec, reuse): 
+        # fact_vec = Batch x hidden layer size
         """Use question vector and previous memory to create scalar attention for current fact"""
-        with tf.variable_scope("attention", reuse=reuse):
+        with tf.variable_scope("attention", reuse=reuse):  
 
+            # print("here")
+            # print(q_vec)
+            # print(prev_memory)
+            # print(fact_vec)
             features = [fact_vec*q_vec,
                         fact_vec*prev_memory,
                         tf.abs(fact_vec - q_vec),
                         tf.abs(fact_vec - prev_memory)]
+            # print(features)
 
             feature_vec = tf.concat(features, 1)
+            # print(feature_vec)
 
             attention = tf.contrib.layers.fully_connected(feature_vec,
                             self.config.embed_size,
                             activation_fn=tf.nn.tanh,
                             reuse=reuse, scope="fc1")
 
+            # print(attention)
+
             attention = tf.contrib.layers.fully_connected(attention,
                             1,
                             activation_fn=None,
                             reuse=reuse, scope="fc2")
+            # print(attention)
 
         return attention
 
@@ -196,7 +218,7 @@ class DMN_PLUS(object):
         """Generate episode by applying attention to current fact vectors through a modified GRU"""
 
         attentions = [tf.squeeze(
-            self.get_attention(q_vec, memory, fv, bool(hop_index) or bool(i)), axis=1)
+            self.get_attention(q_vec, memory, fv, bool(hop_index) or bool(i)), axis=1)  # reuse is false only for 0th hop, and first fv.
             for i, fv in enumerate(tf.unstack(fact_vecs, axis=1))]
 
         attentions = tf.transpose(tf.stack(attentions))
@@ -308,7 +330,17 @@ class DMN_PLUS(object):
 
             answers = a[step*config.batch_size:(step+1)*config.batch_size]
             accuracy += np.sum(pred == answers)/float(len(answers))
-
+            # if(num_epoch == self.max_epochs-1) :
+            #     print(tf.shape(pred), tf.shape(answers))
+            #     for i,a in enumerate(answers) :
+            #         print("test") 
+            #         print(pred[i],a)
+            #         print(self.ivocab[pred[i]], self.ivocab[a])
+            summ = tf.Summary()
+            summ.value.add(tag='accuracy',simple_value=accuracy)
+            #tf.summary.scalar('accuracy', accuracy)
+            if train_writer is not None:
+                train_writer.add_summary(summ, num_epoch*total_steps + step)
 
             total_loss.append(loss)
             if verbose and step % verbose == 0:
@@ -317,11 +349,14 @@ class DMN_PLUS(object):
                   step, total_steps, np.mean(total_loss)))
                 #sys.stdout.flush()
 
+        variables_names = [v.name for v in tf.trainable_variables()]
+        for k in variables_names:
+            print ("Variable: ", k)
 
         if verbose:
             #sys.stdout.write('\r')
             print('\r')
-
+        
         # print("*****"+str(total_steps))
         return np.mean(total_loss), accuracy/float(total_steps)
 

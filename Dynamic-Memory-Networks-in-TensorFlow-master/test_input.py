@@ -23,10 +23,12 @@ def init_babi(fname):
         for scene in episode["scenes"] :
             task = {"C": "", "Q": "", "A": ""}
             for utterance in scene["utterances"]:
-                sentence = []
+                sentence = ''
                 for i,token in enumerate(utterance["tokens"]):
-                    sentence += token
-                    sentence += utterance["speakers"]
+                    token += utterance["speakers"]
+                    sentence += ' '.join(word for word in token)
+                    sentence += ' $& '
+                    # sentence += utterance["speakers"]
                     character_entity = utterance["character_entities"][i]
                     task["Q"] = []
                     task["A"] = []
@@ -88,21 +90,27 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
     inputs = []
     answers = []
     input_masks = []
-    # for x in data_raw:
-    #     if split_sentences:
-    #         inp = x["C"].lower().split(' . ') 
-    #         inp = [w for w in inp if len(w) > 0]
-    #         inp = [i.split() for i in inp]
-    #     else:
-    #         inp = x["C"].lower().split(' ') 
-    #         inp = [w for w in inp if len(w) > 0]
-
-    #     q = x["Q"].lower().split(' ')
-    #     q = [w for w in q if len(w) > 0]
 
     for x in data_raw:
-        inp = x["C"]
-        q = x["Q"]
+        # print("single x")
+        # print(x) 
+        if split_sentences:
+            inp = x["C"].lower().split(' $& ') 
+            inp = [w for w in inp if len(w) > 0]
+            inp = [i.split() for i in inp]
+        else:
+            inp = x["C"].lower().split(' ') 
+            inp = [w for w in inp if len(w) > 0]
+
+        q = x["Q"].lower().split(' ')
+        q = [w for w in q if len(w) > 0]
+
+    #for x in data_raw:
+        # print("single x")
+        # print(x) 
+        # inp = x["C"]
+        # q = x["Q"]
+        # print(inp)
         if split_sentences: 
             inp_vector = [[process_word(word = w, 
                                         word2vec = word2vec, 
@@ -117,6 +125,9 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
                                         ivocab = ivocab, 
                                         word_vector_size = embed_size, 
                                         to_return = "index") for w in inp]
+        # print("INPUT")
+        # print(inp)
+        # print(inp_vector)
                                     
         q_vector = [process_word(word = w, 
                                     word2vec = word2vec, 
@@ -229,6 +240,7 @@ def load_babi(config, split_sentences=False):
         word_embedding = np.random.uniform(-config.embedding_init, config.embedding_init, (len(ivocab), config.embed_size))
 
     inputs, questions, answers, input_masks = train_data if config.train_mode else test_data
+    print ("MODE "+str(config.train_mode))
 
     if split_sentences:
         input_lens, sen_lens, max_sen_len = get_sentence_lens(inputs)
@@ -260,7 +272,8 @@ def load_babi(config, split_sentences=False):
 
         valid = questions[config.num_train:], inputs[config.num_train:], q_lens[config.num_train:], input_lens[config.num_train:], input_masks[config.num_train:], answers[config.num_train:]
         print("FINAL "+str(len(valid[0])))
-        return train, valid, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab)
+        # print(ivocab)
+        return train, valid, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab
 
     else:
         test = questions, inputs, q_lens, input_lens, input_masks, answers
