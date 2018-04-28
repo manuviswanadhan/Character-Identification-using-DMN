@@ -94,6 +94,7 @@ class DMN_PLUS(object):
         self.input_len_placeholder = tf.placeholder(tf.int32, shape=(self.config.batch_size,))
 
         self.answer_placeholder = tf.placeholder(tf.int64, shape=(self.config.batch_size,))
+        self.speaker_info_placeholder = tf.placeholder(tf.int64, shape=(self.config.batch_size,))
 
         self.dropout_placeholder = tf.placeholder(tf.float32)
 
@@ -232,15 +233,19 @@ class DMN_PLUS(object):
         reuse = True if hop_index > 0 else False
 
         # concatenate fact vectors and attentions for input into attGRU
-        gru_inputs = tf.concat([fact_vecs, attentions], 2)
+        # gru_inputs = tf.concat([fact_vecs, attentions], 2)
 
-        with tf.variable_scope('attention_gru', reuse=reuse):
-            _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(self.config.hidden_size),
-                    gru_inputs,
-                    dtype=np.float32,
-                    sequence_length=self.input_len_placeholder
-            )
-        
+        # with tf.variable_scope('attention_gru', reuse=reuse):
+        #     _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(self.config.hidden_size),
+        #             gru_inputs,
+        #             dtype=np.float32,
+        #             sequence_length=self.input_len_placeholder
+        #     )
+        fact_trans = tf.transpose(fact_vecs, perm=[0,2,1])
+        final = tf.matmul(fact_trans, attentions)
+        episode = tf.squeeze(final)
+
+        print("attention : ", attentions)
         # episode = fact_vecs * attentions
         print(episode)
         return episode
@@ -249,10 +254,11 @@ class DMN_PLUS(object):
         """Linear softmax answer module"""
 
         rnn_output = tf.nn.dropout(rnn_output, self.dropout_placeholder)
-
-        output = tf.layers.dense(tf.concat([rnn_output, q_vec], 1),
-                self.vocab_size,
-                activation=None)
+        # with tf.variable_scope("speaker_info", initializer=tf.contrib.layers.xavier_initializer()):
+        speaker_info = tf.nn.embedding_lookup(self.embeddings, self.speaker_info_placeholder)
+        output = tf.layers.dense(tf.concat([rnn_output, q_vec, speaker_info], 1),
+                    self.vocab_size,
+                    activation=None)
 
         return output
 
@@ -284,6 +290,7 @@ class DMN_PLUS(object):
                 print('==> generating episode', i)
                 episode = self.generate_episode(prev_memory, q_vec, fact_vecs, i)
 
+                print("episode : prev_mem : q_vec : fact_vecs", episode, prev_memory, q_vec, fact_vecs)
                 # untied weights for memory update
                 with tf.variable_scope("hop_%d" % i):
                     prev_memory = tf.layers.dense(tf.concat([prev_memory, episode, q_vec], 1),
@@ -313,8 +320,8 @@ class DMN_PLUS(object):
 
         # shuffle data
         p = np.random.permutation(len(data[0]))
-        qp, ip, ql, il, im, a = data
-        qp, ip, ql, il, im, a = qp[p], ip[p], ql[p], il[p], im[p], a[p]
+        qp, ip, ql, il, im, a, si = data
+        qp, ip, ql, il, im, a, si = qp[p], ip[p], ql[p], il[p], im[p], a[p], si[p]
 
         for step in range(total_steps):
             # print("here")
@@ -326,6 +333,7 @@ class DMN_PLUS(object):
                   self.question_len_placeholder: ql[index],
                   self.input_len_placeholder: il[index],
                   self.answer_placeholder: a[index],
+                  self.speaker_info_placeholder: si[index],
                   self.dropout_placeholder: dp}
             loss, pred, summary, _ = session.run(
               [self.calculate_loss, self.pred, self.merged, train_op], feed_dict=feed)
@@ -339,14 +347,25 @@ class DMN_PLUS(object):
                 # for i,ans in enumerate(answers) :
                 #     if(self.ivocab[int(qp[i][0])] == "joseph"):
                 #     print("######", self.ivocab[int(qp[i][0])], self.ivocab[ans])
-                print("ivocab size = ", len(self.ivocab))
-                print(tf.shape(pred), tf.shape(answers))
+                # print("ivocab size = ", len(self.ivocab))
+                # print(tf.shape(pred), tf.shape(answers))
+                # print("Sentence:")
                 for i,ans in enumerate(answers) :
-                    print("#####") 
+                    i += step*config.batch_size
+                    # print("#####") 
                     # print(pred[i],ans)
+                #     for snt in ip[i]:
+                #         if(snt[0]==0):
+                #             break
+                #         for wrd in snt:
+                #             if(wrd == 0):
+                #                 break
+                #             print(self.ivocab[wrd], end = ' ')
+                #         print("")
+
                     print("Question : " + self.ivocab[int(qp[i][0])])
-                    print("Answer given: "+ self.ivocab[pred[i]] + "\t Correct Answer: "+ self.ivocab[ans])
-                    print("Entry number: "+ str(p[step*config.batch_size+i]))
+                    print("Answer given: "+ self.ivocab[pred[i-step*config.batch_size]] + "\t Correct Answer: "+ self.ivocab[ans])
+                    # print("Entry number: "+ str(p[i]))
                     # print("Input", ip[i])
                     #print(self.ivocab[int(qp[i][0])],self.ivocab[pred[i]], self.ivocab[ans], p[step*config.batch_size+i])
                     print("__________")

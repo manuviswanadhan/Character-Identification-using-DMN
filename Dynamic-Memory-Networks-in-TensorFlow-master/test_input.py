@@ -21,11 +21,15 @@ def init_babi(fname):
     sentences = []
     for episode in data["episodes"] :
         for scene in episode["scenes"] :
-            task = {"C": "", "Q": "", "A": ""}
+            task = {"C": "", "Q": "", "A": "", "S": ""}
             for utterance in scene["utterances"]:
                 sentence = ''
+                # sentence += ' '.join(s for s in utterance["speakers"])
+                # sentence += ' ' 
                 for i,token in enumerate(utterance["tokens"]):
-                    token += utterance["speakers"]
+                    # token += utterance["speakers"]
+                    # if(len(sentence) != 0) :
+                    #     sentence = sentence[:-2]
                     sentence += ' '.join(word for word in token)
                     sentence += ' $& '
                     # sentence += utterance["speakers"]
@@ -39,7 +43,8 @@ def init_babi(fname):
                             #task["Q"] = ' '.join(word for word in token[c[0]:c[1]])
                             task["Q"] = token[c[0]]
                             task["A"] = c[2]
-                            # # if(token[c[0]] == "Joseph") :
+                            task["S"] = ' '.join(s for s in utterance["speakers"])
+                            # if(token[c[0]] == "Joseph") :
                             # print("________________")
                             # print(str(len(tasks)))
                             # print("task[C]")
@@ -101,6 +106,7 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
     questions = []
     inputs = []
     answers = []
+    speaker_info = []
     input_masks = []
 
     for x in data_raw:
@@ -159,6 +165,13 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
                                         ivocab = ivocab, 
                                         word_vector_size = embed_size, 
                                         to_return = "index"))
+
+        speaker_info.append(process_word(word = x["S"], 
+                                        word2vec = word2vec, 
+                                        vocab = vocab, 
+                                        ivocab = ivocab, 
+                                        word_vector_size = embed_size, 
+                                        to_return = "index"))
         # NOTE: here we assume the answer is one word! 
 
         if not split_sentences:
@@ -169,7 +182,7 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
             else:
                 raise Exception("invalid input_mask_mode")
 
-    return inputs, questions, answers, input_masks
+    return inputs, questions, answers, speaker_info, input_masks
 
 def get_lens(inputs, split_sentences=False):
     lens = np.zeros((len(inputs)), dtype=int)
@@ -251,7 +264,7 @@ def load_babi(config, split_sentences=False):
     else:
         word_embedding = np.random.uniform(-config.embedding_init, config.embedding_init, (len(ivocab), config.embed_size))
 
-    inputs, questions, answers, input_masks = train_data if config.train_mode else test_data
+    inputs, questions, answers, speaker_info, input_masks = train_data if config.train_mode else test_data
     print ("MODE "+str(config.train_mode))
 
     if split_sentences:
@@ -278,15 +291,16 @@ def load_babi(config, split_sentences=False):
     questions = pad_inputs(questions, q_lens, max_q_len)
 
     answers = np.stack(answers)
+    speaker_info = np.stack(speaker_info)
 
     if config.train_mode:
-        train = questions[:config.num_train], inputs[:config.num_train], q_lens[:config.num_train], input_lens[:config.num_train], input_masks[:config.num_train], answers[:config.num_train]
+        train = questions[:config.num_train], inputs[:config.num_train], q_lens[:config.num_train], input_lens[:config.num_train], input_masks[:config.num_train], answers[:config.num_train], speaker_info[:config.num_train]
 
-        valid = questions[config.num_train:], inputs[config.num_train:], q_lens[config.num_train:], input_lens[config.num_train:], input_masks[config.num_train:], answers[config.num_train:]
+        valid = questions[config.num_train:], inputs[config.num_train:], q_lens[config.num_train:], input_lens[config.num_train:], input_masks[config.num_train:], answers[config.num_train:], speaker_info[config.num_train:]
         print("FINAL "+str(len(valid[0])))
         # print(ivocab)
         return train, valid, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab
 
     else:
-        test = questions, inputs, q_lens, input_lens, input_masks, answers
+        test = questions, inputs, q_lens, input_lens, input_masks, answers, speaker_info
         return test, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab
