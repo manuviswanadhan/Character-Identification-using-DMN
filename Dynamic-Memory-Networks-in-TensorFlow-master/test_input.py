@@ -60,8 +60,8 @@ def init_babi(fname):
 
 
 def get_babi_raw(id, test_id):
-    babi_train_raw = init_babi('./data/data_train.json')
-    babi_test_raw = init_babi('./data/data_test.json')
+    babi_train_raw = init_babi('./train.json')
+    babi_test_raw = init_babi('./test.json')
     babi_valid_raw = init_babi('./data/data_valid.json')
     print("hello"+ str(len(babi_test_raw))+" "+str(len(babi_train_raw)))
     return babi_train_raw, babi_valid_raw, babi_test_raw
@@ -268,8 +268,9 @@ def load_babi(config, split_sentences=False):
         word_embedding = np.random.uniform(-config.embedding_init, config.embedding_init, (len(ivocab), config.embed_size))
 
 
-    full_data = [train_data[i]+valid_data[i] for i in range(len(train_data))]
-    inputs, questions, answers, speaker_info, input_masks = full_data if config.train_mode else test_data
+    # full_data = [train_data[i]+valid_data[i] for i in range(len(train_data))]
+    # inputs, questions, answers, speaker_info, input_masks = full_data if config.train_mode else test_data
+    inputs, questions, answers, speaker_info, input_masks = train_data if config.train_mode else test_data
 
     print ("MODE "+str(config.train_mode))
 
@@ -299,12 +300,12 @@ def load_babi(config, split_sentences=False):
     answers = np.stack(answers)
     speaker_info = np.stack(speaker_info)
 
-    test_len = len(train_data[0])
+    test_len = int(0.8 * len(train_data[0]))
     print("test_len", test_len)
 
     if config.train_mode:
         print("manu",len(questions))
-        train = questions[:test_len], inputs[:test_len], q_lens[:test_len], input_lens[:config.num_train], input_masks[:test_len], answers[:test_len], speaker_info[:test_len]
+        train = questions[:test_len], inputs[:test_len], q_lens[:test_len], input_lens[:test_len], input_masks[:test_len], answers[:test_len], speaker_info[:test_len]
 
         valid = questions[test_len:], inputs[test_len:], q_lens[test_len:], input_lens[test_len:], input_masks[test_len:], answers[test_len:], speaker_info[test_len:]
         print("FINAL "+str(len(valid[0])))
