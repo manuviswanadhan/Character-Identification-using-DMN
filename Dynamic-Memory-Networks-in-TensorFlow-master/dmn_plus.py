@@ -43,7 +43,7 @@ class Config(object):
     num_attention_features = 4
 
     max_allowed_inputs = 130
-    num_train = 3000 ######## COnfigurable
+    num_train = 5500  ######## COnfigurable
 
     floatX = np.float32
 
@@ -182,7 +182,7 @@ class DMN_PLUS(object):
 
         return fact_vecs
 
-    def get_attention(self, q_vec, prev_memory, fact_vec, reuse): 
+    def get_attention(self, q_vec, prev_memory, fact_vec, speaker_info, reuse): 
         # fact_vec = Batch x hidden layer size
         """Use question vector and previous memory to create scalar attention for current fact"""
         with tf.variable_scope("attention", reuse=reuse):  
@@ -191,10 +191,15 @@ class DMN_PLUS(object):
             # print(q_vec)
             # print(prev_memory)
             # print(fact_vec)
+            # features = [fact_vec*q_vec,
+            #             fact_vec*prev_memory,
+            #             tf.abs(fact_vec - q_vec),
+            #             tf.abs(fact_vec - prev_memory),
+            #             speaker_info]
             features = [fact_vec*q_vec,
-                        fact_vec*prev_memory,
-                        tf.abs(fact_vec - q_vec),
-                        tf.abs(fact_vec - prev_memory)]
+            fact_vec*prev_memory,
+            tf.abs(fact_vec - q_vec),
+            tf.abs(fact_vec - prev_memory)]
             # print(features)
 
             feature_vec = tf.concat(features, 1)
@@ -215,11 +220,11 @@ class DMN_PLUS(object):
 
         return attention
 
-    def generate_episode(self, memory, q_vec, fact_vecs, hop_index):
+    def generate_episode(self, memory, q_vec, fact_vecs, speaker_info, hop_index):
         """Generate episode by applying attention to current fact vectors through a modified GRU"""
 
         attentions = [tf.squeeze(
-            self.get_attention(q_vec, memory, fv, bool(hop_index) or bool(i)), axis=1)  # reuse is false only for 0th hop, and first fv.
+            self.get_attention(q_vec, memory, fv, speaker_info, bool(hop_index) or bool(i)), axis=1)  # reuse is false only for 0th hop, and first fv.
             for i, fv in enumerate(tf.unstack(fact_vecs, axis=1))]
 
         attentions = tf.transpose(tf.stack(attentions))
@@ -232,33 +237,40 @@ class DMN_PLUS(object):
         print("done")
         reuse = True if hop_index > 0 else False
 
-        # concatenate fact vectors and attentions for input into attGRU
-        # gru_inputs = tf.concat([fact_vecs, attentions], 2)
+        speaker_info_sentence = tf.expand_dims(tf.ones([self.max_sentences,1]), 1) * speaker_info
+        speaker_info_sentence = tf.transpose(speaker_info_sentence, perm=[1,0,2])  # assigning the speaker to each sentence spoken
+        print("speaker_info_sentence", speaker_info_sentence)
 
-        # with tf.variable_scope('attention_gru', reuse=reuse):
-        #     _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(self.config.hidden_size),
-        #             gru_inputs,
-        #             dtype=np.float32,
-        #             sequence_length=self.input_len_placeholder
-        #     )
-        fact_trans = tf.transpose(fact_vecs, perm=[0,2,1])
-        final = tf.matmul(fact_trans, attentions)
-        episode = tf.squeeze(final)
+        # concatenate fact vectors and attentions for input into attGRU
+        gru_inputs = tf.concat([fact_vecs, speaker_info_sentence, attentions], 2)
+
+        with tf.variable_scope('attention_gru', reuse=reuse):
+            _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(2*self.config.hidden_size),
+                    gru_inputs,
+                    dtype=np.float32,
+                    sequence_length=self.input_len_placeholder
+            )
+        # fact_trans = tf.transpose(fact_vecs, perm=[0,2,1])
+        # final = tf.matmul(fact_trans, attentions)
+        # episode = tf.squeeze(final)
 
         print("attention : ", attentions)
         # episode = fact_vecs * attentions
         print(episode)
         return episode
 
-    def add_answer_module(self, rnn_output, q_vec):
+    def add_answer_module(self, rnn_output, q_vec, speaker_info):
         """Linear softmax answer module"""
 
         rnn_output = tf.nn.dropout(rnn_output, self.dropout_placeholder)
         # with tf.variable_scope("speaker_info", initializer=tf.contrib.layers.xavier_initializer()):
-        speaker_info = tf.nn.embedding_lookup(self.embeddings, self.speaker_info_placeholder)
+        # speaker_info = tf.nn.embedding_lookup(self.embeddings, self.speaker_info_placeholder)
         output = tf.layers.dense(tf.concat([rnn_output, q_vec, speaker_info], 1),
                     self.vocab_size,
                     activation=None)
+        # output = tf.layers.dense(tf.concat([rnn_output, q_vec], 1),
+        #     self.vocab_size,
+        #     activation=None)
 
         return output
 
@@ -275,6 +287,10 @@ class DMN_PLUS(object):
             print('==> get input representation')
             fact_vecs = self.get_input_representation()
 
+        with tf.variable_scope("speaker", initializer=tf.contrib.layers.xavier_initializer()):
+            print('==> get speaker representation')
+            speaker_info = tf.nn.embedding_lookup(self.embeddings, self.speaker_info_placeholder)        
+
         # keep track of attentions for possible strong supervision
         self.attentions = []
 
@@ -288,7 +304,7 @@ class DMN_PLUS(object):
             for i in range(self.config.num_hops):
                 # get a new episode
                 print('==> generating episode', i)
-                episode = self.generate_episode(prev_memory, q_vec, fact_vecs, i)
+                episode = self.generate_episode(prev_memory, q_vec, fact_vecs, speaker_info, i)
 
                 print("episode : prev_mem : q_vec : fact_vecs", episode, prev_memory, q_vec, fact_vecs)
                 # untied weights for memory update
@@ -301,7 +317,8 @@ class DMN_PLUS(object):
 
         # pass memory module output through linear answer module
         with tf.variable_scope("answer", initializer=tf.contrib.layers.xavier_initializer()):
-            output = self.add_answer_module(output, q_vec)
+            output = self.add_answer_module(output, q_vec, speaker_info)
+            # output = self.add_answer_module(output, q_vec)
 
         return output
 
@@ -343,32 +360,32 @@ class DMN_PLUS(object):
 
             answers = a[step*config.batch_size:(step+1)*config.batch_size]
             accuracy += np.sum(pred == answers)/float(len(answers))
-            if(train == False) :
+            # if(train == False) :
                 # for i,ans in enumerate(answers) :
                 #     if(self.ivocab[int(qp[i][0])] == "joseph"):
                 #     print("######", self.ivocab[int(qp[i][0])], self.ivocab[ans])
                 # print("ivocab size = ", len(self.ivocab))
                 # print(tf.shape(pred), tf.shape(answers))
                 # print("Sentence:")
-                for i,ans in enumerate(answers) :
-                    i += step*config.batch_size
-                    # print("#####") 
-                    # print(pred[i],ans)
-                #     for snt in ip[i]:
-                #         if(snt[0]==0):
-                #             break
-                #         for wrd in snt:
-                #             if(wrd == 0):
-                #                 break
-                #             print(self.ivocab[wrd], end = ' ')
-                #         print("")
+                # for i,ans in enumerate(answers) :
+                #     i += step*config.batch_size
+                #     # print("#####") 
+                #     # print(pred[i],ans)
+                # #     for snt in ip[i]:
+                # #         if(snt[0]==0):
+                # #             break
+                # #         for wrd in snt:
+                # #             if(wrd == 0):
+                # #                 break
+                # #             print(self.ivocab[wrd], end = ' ')
+                # #         print("")
 
-                    print("Question : " + self.ivocab[int(qp[i][0])])
-                    print("Answer given: "+ self.ivocab[pred[i-step*config.batch_size]] + "\t Correct Answer: "+ self.ivocab[ans])
-                    # print("Entry number: "+ str(p[i]))
-                    # print("Input", ip[i])
-                    #print(self.ivocab[int(qp[i][0])],self.ivocab[pred[i]], self.ivocab[ans], p[step*config.batch_size+i])
-                    print("__________")
+                #     print("Question : " + self.ivocab[int(qp[i][0])])
+                #     print("Answer given: "+ self.ivocab[pred[i-step*config.batch_size]] + "\t Correct Answer: "+ self.ivocab[ans])
+                #     # print("Entry number: "+ str(p[i]))
+                #     # print("Input", ip[i])
+                #     #print(self.ivocab[int(qp[i][0])],self.ivocab[pred[i]], self.ivocab[ans], p[step*config.batch_size+i])
+                #     print("__________")
             summ = tf.Summary()
             summ.value.add(tag='accuracy',simple_value=accuracy)
             #tf.summary.scalar('accuracy', accuracy)

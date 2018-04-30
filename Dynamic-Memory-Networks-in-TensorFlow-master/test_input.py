@@ -62,8 +62,9 @@ def init_babi(fname):
 def get_babi_raw(id, test_id):
     babi_train_raw = init_babi('./data/data_train.json')
     babi_test_raw = init_babi('./data/data_test.json')
+    babi_valid_raw = init_babi('./data/data_valid.json')
     print("hello"+ str(len(babi_test_raw))+" "+str(len(babi_train_raw)))
-    return babi_train_raw, babi_test_raw
+    return babi_train_raw, babi_valid_raw, babi_test_raw
 
             
 def load_glove(dim):
@@ -236,7 +237,7 @@ def load_babi(config, split_sentences=False):
     vocab = {}
     ivocab = {}
 
-    babi_train_raw, babi_test_raw = get_babi_raw(config.babi_id, config.babi_test_id)
+    babi_train_raw, babi_valid_raw, babi_test_raw = get_babi_raw(config.babi_id, config.babi_test_id)
 
     if config.word2vec_init:
         assert config.embed_size == 100
@@ -254,6 +255,8 @@ def load_babi(config, split_sentences=False):
 
     print('==> get train inputs')
     train_data = process_input(babi_train_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
+    print('==> get validation inputs')
+    valid_data = process_input(babi_valid_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
     print('==> get test inputs')
     test_data = process_input(babi_test_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
     # print("hhhhh"+str(len(test_data[1])))
@@ -264,7 +267,10 @@ def load_babi(config, split_sentences=False):
     else:
         word_embedding = np.random.uniform(-config.embedding_init, config.embedding_init, (len(ivocab), config.embed_size))
 
-    inputs, questions, answers, speaker_info, input_masks = train_data if config.train_mode else test_data
+
+    full_data = [train_data[i]+valid_data[i] for i in range(len(train_data))]
+    inputs, questions, answers, speaker_info, input_masks = full_data if config.train_mode else test_data
+
     print ("MODE "+str(config.train_mode))
 
     if split_sentences:
@@ -293,10 +299,14 @@ def load_babi(config, split_sentences=False):
     answers = np.stack(answers)
     speaker_info = np.stack(speaker_info)
 
-    if config.train_mode:
-        train = questions[:config.num_train], inputs[:config.num_train], q_lens[:config.num_train], input_lens[:config.num_train], input_masks[:config.num_train], answers[:config.num_train], speaker_info[:config.num_train]
+    test_len = len(train_data[0])
+    print("test_len", test_len)
 
-        valid = questions[config.num_train:], inputs[config.num_train:], q_lens[config.num_train:], input_lens[config.num_train:], input_masks[config.num_train:], answers[config.num_train:], speaker_info[config.num_train:]
+    if config.train_mode:
+        print("manu",len(questions))
+        train = questions[:test_len], inputs[:test_len], q_lens[:test_len], input_lens[:config.num_train], input_masks[:test_len], answers[:test_len], speaker_info[:test_len]
+
+        valid = questions[test_len:], inputs[test_len:], q_lens[test_len:], input_lens[test_len:], input_masks[test_len:], answers[test_len:], speaker_info[test_len:]
         print("FINAL "+str(len(valid[0])))
         # print(ivocab)
         return train, valid, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab
