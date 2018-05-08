@@ -25,7 +25,7 @@ class Config(object):
     early_stopping = 20
 
     dropout = 0.9
-    lr = 0.001 # was 0.001 initially
+    lr = 0.05 # was 0.001 initially
     l2 = 0.001 # increasing regularization, 0.001
 
     cap_grads = False
@@ -82,7 +82,7 @@ class DMN_PLUS(object):
         if self.config.train_mode:
             self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab = test_input.load_babi(self.config, split_sentences=True)
         else:
-            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab = test_input.load_babi(self.config, split_sentences=True)
+            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab= test_input.load_babi(self.config, split_sentences=True)
         self.encoding = _position_encoding(self.max_sen_len, self.config.embed_size)
 
     def add_placeholders(self):
@@ -191,15 +191,15 @@ class DMN_PLUS(object):
             # print(q_vec)
             # print(prev_memory)
             # print(fact_vec)
-            # features = [fact_vec*q_vec,
-            #             fact_vec*prev_memory,
-            #             tf.abs(fact_vec - q_vec),
-            #             tf.abs(fact_vec - prev_memory),
-            #             speaker_info]
             features = [fact_vec*q_vec,
-            fact_vec*prev_memory,
-            tf.abs(fact_vec - q_vec),
-            tf.abs(fact_vec - prev_memory)]
+                        fact_vec*prev_memory,
+                        tf.abs(fact_vec - q_vec),
+                        tf.abs(fact_vec - prev_memory),
+                        speaker_info]
+            # features = [fact_vec*q_vec,
+            # fact_vec*prev_memory,
+            # tf.abs(fact_vec - q_vec),
+            # tf.abs(fact_vec - prev_memory)]
             # print(features)
 
             feature_vec = tf.concat(features, 1)

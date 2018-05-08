@@ -8,6 +8,8 @@ import sys
 import os as os
 import numpy as np
 
+import test_entity as test_entity
+
 # can be sentence or word
 input_mask_mode = "sentence"
 
@@ -59,7 +61,7 @@ def init_babi(fname):
     return tasks
 
 
-def get_babi_raw(id, test_id):
+def get_babi_raw():
     babi_train_raw = init_babi('./train.json')
     babi_test_raw = init_babi('./test.json')
     babi_valid_raw = init_babi('./data/data_valid.json')
@@ -88,12 +90,15 @@ def create_vector(word, word2vec, word_vector_size, silent=True):
         print("utils.py::create_vector => %s is missing" % word)
     return vector
 
-def process_word(word, word2vec, vocab, ivocab, word_vector_size, to_return="word2vec", silent=True):
+def process_word(word, word2vec, vocab, ivocab, entity_vocab, word_vector_size, to_return="word2vec", silent=True):
     if not word in word2vec:
         create_vector(word, word2vec, word_vector_size, silent)
     if not word in vocab: 
         next_index = len(vocab)
+
         vocab[word] = next_index
+        entity_vocab[next_index] = test_entity.get_index(word)
+        # print("vocab of " + str(word) + " is " + str(vocab[word]) + " and its entity_vocab is " + str(entity_vocab[next_index]))
         ivocab[next_index] = word
     
     if to_return == "word2vec":
@@ -103,7 +108,7 @@ def process_word(word, word2vec, vocab, ivocab, word_vector_size, to_return="wor
     elif to_return == "onehot":
         raise Exception("to_return = 'onehot' is not implemented yet")
 
-def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_sentences=False):
+def process_input(data_raw, floatX, word2vec, vocab, ivocab, entity_vocab, embed_size, split_sentences=False):
     questions = []
     inputs = []
     answers = []
@@ -135,13 +140,15 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
                                         word2vec = word2vec, 
                                         vocab = vocab, 
                                         ivocab = ivocab, 
+                                        entity_vocab = entity_vocab,
                                         word_vector_size = embed_size, 
                                         to_return = "index") for w in s] for s in inp]
         else:
             inp_vector = [process_word(word = w, 
                                         word2vec = word2vec, 
                                         vocab = vocab, 
-                                        ivocab = ivocab, 
+                                        ivocab = ivocab,
+                                        entity_vocab = entity_vocab, 
                                         word_vector_size = embed_size, 
                                         to_return = "index") for w in inp]
         # print("INPUT")
@@ -152,6 +159,7 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
                                     word2vec = word2vec, 
                                     vocab = vocab, 
                                     ivocab = ivocab, 
+                                    entity_vocab = entity_vocab,
                                     word_vector_size = embed_size, 
                                     to_return = "index") for w in q]
         
@@ -164,6 +172,7 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
                                         word2vec = word2vec, 
                                         vocab = vocab, 
                                         ivocab = ivocab, 
+                                        entity_vocab = entity_vocab,
                                         word_vector_size = embed_size, 
                                         to_return = "index"))
 
@@ -171,6 +180,7 @@ def process_input(data_raw, floatX, word2vec, vocab, ivocab, embed_size, split_s
                                         word2vec = word2vec, 
                                         vocab = vocab, 
                                         ivocab = ivocab, 
+                                        entity_vocab = entity_vocab,
                                         word_vector_size = embed_size, 
                                         to_return = "index"))
         # NOTE: here we assume the answer is one word! 
@@ -236,8 +246,9 @@ def create_embedding(word2vec, ivocab, embed_size):
 def load_babi(config, split_sentences=False):
     vocab = {}
     ivocab = {}
+    entity_vocab = {}
 
-    babi_train_raw, babi_valid_raw, babi_test_raw = get_babi_raw(config.babi_id, config.babi_test_id)
+    babi_train_raw, babi_valid_raw, babi_test_raw = get_babi_raw()
 
     if config.word2vec_init:
         assert config.embed_size == 100
@@ -250,15 +261,16 @@ def load_babi(config, split_sentences=False):
                 word2vec = word2vec, 
                 vocab = vocab, 
                 ivocab = ivocab, 
+                entity_vocab = entity_vocab,
                 word_vector_size = config.embed_size, 
                 to_return = "index")
 
     print('==> get train inputs')
-    train_data = process_input(babi_train_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
+    train_data = process_input(babi_train_raw, config.floatX, word2vec, vocab, ivocab, entity_vocab, config.embed_size, split_sentences)
     print('==> get validation inputs')
-    valid_data = process_input(babi_valid_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
+    valid_data = process_input(babi_valid_raw, config.floatX, word2vec, vocab, ivocab, entity_vocab, config.embed_size, split_sentences)
     print('==> get test inputs')
-    test_data = process_input(babi_test_raw, config.floatX, word2vec, vocab, ivocab, config.embed_size, split_sentences)
+    test_data = process_input(babi_test_raw, config.floatX, word2vec, vocab, ivocab, entity_vocab, config.embed_size, split_sentences)
     # print("hhhhh"+str(len(test_data[1])))
 
     if config.word2vec_init:
@@ -310,8 +322,8 @@ def load_babi(config, split_sentences=False):
         valid = questions[test_len:], inputs[test_len:], q_lens[test_len:], input_lens[test_len:], input_masks[test_len:], answers[test_len:], speaker_info[test_len:]
         print("FINAL "+str(len(valid[0])))
         # print(ivocab)
-        return train, valid, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab
+        return train, valid, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab #, entity_vocab
 
     else:
         test = questions, inputs, q_lens, input_lens, input_masks, answers, speaker_info
-        return test, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab
+        return test, word_embedding, max_q_len, max_input_len, max_mask_len, len(vocab), ivocab #, entity_vocab

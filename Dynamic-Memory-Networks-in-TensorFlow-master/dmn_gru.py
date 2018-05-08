@@ -25,7 +25,7 @@ class Config(object):
     early_stopping = 20
 
     dropout = 0.9
-    lr = 0.001 # was 0.001 initially
+    lr = 0.05 # was 0.001 initially
     l2 = 0.001 # increasing regularization, 0.001
 
     cap_grads = False

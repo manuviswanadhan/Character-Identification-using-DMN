@@ -25,7 +25,7 @@ class Config(object):
     early_stopping = 20
 
     dropout = 0.9
-    lr = 0.001 # was 0.001 initially
+    lr = 0.05 # was 0.001 initially
     l2 = 0.001 # increasing regularization, 0.001
 
     cap_grads = False
@@ -191,15 +191,15 @@ class DMN_PLUS(object):
             # print(q_vec)
             # print(prev_memory)
             # print(fact_vec)
-            # features = [fact_vec*q_vec,
-            #             fact_vec*prev_memory,
-            #             tf.abs(fact_vec - q_vec),
-            #             tf.abs(fact_vec - prev_memory),
-            #             speaker_info]
             features = [fact_vec*q_vec,
-            fact_vec*prev_memory,
-            tf.abs(fact_vec - q_vec),
-            tf.abs(fact_vec - prev_memory)]
+                        fact_vec*prev_memory,
+                        tf.abs(fact_vec - q_vec),
+                        tf.abs(fact_vec - prev_memory),
+                        speaker_info]
+            # features = [fact_vec*q_vec,
+            # fact_vec*prev_memory,
+            # tf.abs(fact_vec - q_vec),
+            # tf.abs(fact_vec - prev_memory)]
             # print(features)
 
             feature_vec = tf.concat(features, 1)
@@ -266,7 +266,7 @@ class DMN_PLUS(object):
         rnn_output = tf.nn.dropout(rnn_output, self.dropout_placeholder)
         # with tf.variable_scope("speaker_info", initializer=tf.contrib.layers.xavier_initializer()):
         # speaker_info = tf.nn.embedding_lookup(self.embeddings, self.speaker_info_placeholder)
-        output = tf.layers.dense(tf.concat([rnn_output, q_vec], 1),
+        output = tf.layers.dense(tf.concat([rnn_output, q_vec, speaker_info], 1),
                     self.vocab_size,
                     activation=None)
         # output = tf.layers.dense(tf.concat([rnn_output, q_vec], 1),

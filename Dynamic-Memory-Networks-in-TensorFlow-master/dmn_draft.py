@@ -15,13 +15,12 @@ parser.add_argument("-t", "--dmn_type", help="specify type of dmn (default=origi
 parser.add_argument("-l2", "--l2_loss", type=float, default=0.001, help="specify l2 loss constant")
 parser.add_argument("-lr", "--lr", type=float, default=0.001, help="specify learning rate constant")
 parser.add_argument("-m", "--model_arch", type=str, help="specify the architecture (gru/ans/ansgru) for the model")
-parser.add_argument("-attn", "--attn", type=str, default="", help="specify whether attention includes speaker info (true)")
 
 args = parser.parse_args()
 
 dmn_type = args.dmn_type if args.dmn_type is not None else "plus"
 
-file_name = "dmn_"+ (str(args.model_arch) if args.model_arch is not None else "plus") + ( "attn" if args.attn is not "" else "")
+file_name = "dmn_"+ (str(args.model_arch) if args.model_arch is not None else "plus_test")
 
 mod = importlib.import_module(file_name)
 config = mod.Config
@@ -33,7 +32,7 @@ if args.babi_task_id is not None:
     config.babi_id = args.babi_task_id
 
 config.strong_supervision = False
-config.model_arch = (args.model_arch if args.model_arch is not None else "plus") + ( "attn" if args.attn is not "" else "")
+config.model_arch = args.model_arch if args.model_arch is not None else "plus"
 
 config.train_mode = False
 

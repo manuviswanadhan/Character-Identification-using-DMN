@@ -25,7 +25,7 @@ class Config(object):
     early_stopping = 20
 
     dropout = 0.9
-    lr = 0.001 # was 0.001 initially
+    lr = 0.05 # was 0.001 initially
     l2 = 0.001 # increasing regularization, 0.001
 
     cap_grads = False
@@ -47,10 +47,15 @@ class Config(object):
 
     floatX = np.float32
 
-    babi_id = "1"
+    d = "1"
     babi_test_id = ""
 
     train_mode = True
+
+    attn = "false"
+    GRU = "true"
+    model_arch = "none"
+
 
 def _add_gradient_noise(t, stddev=1e-3, name=None):
     """Adds gradient noise as described in http://arxiv.org/abs/1511.06807
@@ -191,15 +196,17 @@ class DMN_PLUS(object):
             # print(q_vec)
             # print(prev_memory)
             # print(fact_vec)
-            # features = [fact_vec*q_vec,
-            #             fact_vec*prev_memory,
-            #             tf.abs(fact_vec - q_vec),
-            #             tf.abs(fact_vec - prev_memory),
-            #             speaker_info]
-            features = [fact_vec*q_vec,
-            fact_vec*prev_memory,
-            tf.abs(fact_vec - q_vec),
-            tf.abs(fact_vec - prev_memory)]
+            if(self.config.attn == "false") : 
+                features = [fact_vec*q_vec,
+                fact_vec*prev_memory,
+                tf.abs(fact_vec - q_vec),
+                tf.abs(fact_vec - prev_memory)]
+            else : 
+                features = [fact_vec*q_vec,
+                            fact_vec*prev_memory,
+                            tf.abs(fact_vec - q_vec),
+                            tf.abs(fact_vec - prev_memory),
+                            speaker_info]
             # print(features)
 
             feature_vec = tf.concat(features, 1)
@@ -235,29 +242,42 @@ class DMN_PLUS(object):
         # print("hello")
         # print(fact_vecs, attentions)
         # print("done")
-        reuse = True if hop_index > 0 else False
+        if self.config.GRU == "true" :
+            reuse = True if hop_index > 0 else False
 
-        speaker_info_sentence = tf.expand_dims(tf.ones([self.max_sentences,1]), 1) * speaker_info
-        speaker_info_sentence = tf.transpose(speaker_info_sentence, perm=[1,0,2])  # assigning the speaker to each sentence spoken
-        print("speaker_info_sentence", speaker_info_sentence)
+            if self.config.speaker_gru is not None: 
 
-        # concatenate fact vectors and attentions for input into attGRU
-        gru_inputs = tf.concat([fact_vecs, speaker_info_sentence, attentions], 2)
-        # gru_inputs = tf.concat([fact_vecs, attentions], 2)
+                speaker_info_sentence = tf.expand_dims(tf.ones([self.max_sentences,1]), 1) * speaker_info
+                speaker_info_sentence = tf.transpose(speaker_info_sentence, perm=[1,0,2])  # assigning the speaker to each sentence spoken
+                print("speaker_info_sentence", speaker_info_sentence)
 
-        with tf.variable_scope('attention_gru', reuse=reuse):
-            _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(2*self.config.hidden_size),
-                    gru_inputs,
-                    dtype=np.float32,
-                    sequence_length=self.input_len_placeholder
-            )
-        # fact_trans = tf.transpose(fact_vecs, perm=[0,2,1])
-        # final = tf.matmul(fact_trans, attentions)
-        # episode = tf.squeeze(final)
+                # concatenate fact vectors and attentions for input into attGRU
+                gru_inputs = tf.concat([fact_vecs, speaker_info_sentence, attentions], 2)
+                # gru_inputs = tf.concat([fact_vecs, attentions], 2)
 
-        print("attention : ", attentions)
-        # episode = fact_vecs * attentions
-        print(episode)
+                with tf.variable_scope('attention_gru', reuse=reuse):
+                    _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(2*self.config.hidden_size),
+                            gru_inputs,
+                            dtype=np.float32,
+                            sequence_length=self.input_len_placeholder
+                    )
+            else :
+                # concatenate fact vectors and attentions for input into attGRU
+                gru_inputs = tf.concat([fact_vecs, attentions], 2)
+                # gru_inputs = tf.concat([fact_vecs, attentions], 2)
+
+                with tf.variable_scope('attention_gru', reuse=reuse):
+                    _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(self.config.hidden_size),
+                            gru_inputs,
+                            dtype=np.float32,
+                            sequence_length=self.input_len_placeholder
+                    )
+        else : 
+            fact_trans = tf.transpose(fact_vecs, perm=[0,2,1])
+            final = tf.matmul(fact_trans, attentions)
+            episode = tf.squeeze(final)
+            episode = fact_vecs * attentions
+        # print(episode)
         return episode
 
     def add_answer_module(self, rnn_output, q_vec, speaker_info):

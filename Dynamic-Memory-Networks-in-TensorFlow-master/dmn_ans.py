@@ -242,11 +242,11 @@ class DMN_PLUS(object):
         print("speaker_info_sentence", speaker_info_sentence)
 
         # concatenate fact vectors and attentions for input into attGRU
-        gru_inputs = tf.concat([fact_vecs, speaker_info_sentence, attentions], 2)
-        # gru_inputs = tf.concat([fact_vecs, attentions], 2)
+        # gru_inputs = tf.concat([fact_vecs, speaker_info_sentence, attentions], 2)
+        gru_inputs = tf.concat([fact_vecs, attentions], 2)
 
         with tf.variable_scope('attention_gru', reuse=reuse):
-            _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(2*self.config.hidden_size),
+            _, episode = tf.nn.dynamic_rnn(AttentionGRUCell(self.config.hidden_size),
                     gru_inputs,
                     dtype=np.float32,
                     sequence_length=self.input_len_placeholder
@@ -266,7 +266,7 @@ class DMN_PLUS(object):
         rnn_output = tf.nn.dropout(rnn_output, self.dropout_placeholder)
         # with tf.variable_scope("speaker_info", initializer=tf.contrib.layers.xavier_initializer()):
         # speaker_info = tf.nn.embedding_lookup(self.embeddings, self.speaker_info_placeholder)
-        output = tf.layers.dense(tf.concat([rnn_output, q_vec], 1),
+        output = tf.layers.dense(tf.concat([rnn_output, q_vec, speaker_info], 1),
                     self.vocab_size,
                     activation=None)
         # output = tf.layers.dense(tf.concat([rnn_output, q_vec], 1),

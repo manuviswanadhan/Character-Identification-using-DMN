@@ -80,9 +80,9 @@ class DMN_PLUS(object):
     def load_data(self, debug=False):
         """Loads train/valid/test data and sentence encoding"""
         if self.config.train_mode:
-            self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab = test_input.load_babi(self.config, split_sentences=True)
+            self.train, self.valid, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab, self.entity_vocab = test_input.load_babi(self.config, split_sentences=True)
         else:
-            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab = test_input.load_babi(self.config, split_sentences=True)
+            self.test, self.word_embedding, self.max_q_len, self.max_sentences, self.max_sen_len, self.vocab_size, self.ivocab, self.entity_vocab = test_input.load_babi(self.config, split_sentences=True)
         self.encoding = _position_encoding(self.max_sen_len, self.config.embed_size)
 
     def add_placeholders(self):
@@ -335,12 +335,13 @@ class DMN_PLUS(object):
         print (str(total_steps)+" "+str(config.batch_size))
         total_loss = []
         accuracy = 0
-
+        final_ans = range(len(data[0]))
         # shuffle data
         p = np.random.permutation(len(data[0]))
         qp, ip, ql, il, im, a, si = data
         qp, ip, ql, il, im, a, si = qp[p], ip[p], ql[p], il[p], im[p], a[p], si[p]
-
+        # print("Manu",len(data[0]), len(a))
+        # print("total size", total_steps*config.batch_size)
         for step in range(total_steps):
             # print("here")
             # print(total_steps)
@@ -361,6 +362,10 @@ class DMN_PLUS(object):
 
             answers = a[step*config.batch_size:(step+1)*config.batch_size]
             accuracy += np.sum(pred == answers)/float(len(answers))
+            for k,pred_val in enumerate(pred):
+                final_ans[step*config.batch_size + k] = self.entity_vocab[pred_val]
+                print("pred_val is " + str(pred_val) + " and mapped entity is " + str(final_ans[step*config.batch_size + k]))
+                print("\t the predicted ans is " + self.ivocab[pred_val] + "\n\t the correct ans is " + self.ivocab[answers[k]])
             # if(train == False) :
                 # for i,ans in enumerate(answers) :
                 #     if(self.ivocab[int(qp[i][0])] == "joseph"):
@@ -408,6 +413,12 @@ class DMN_PLUS(object):
             #sys.stdout.write('\r')
             print('\r')
         
+        if train == False:
+            f = open('answer/log.txt', 'w')
+            for val in final_ans : 
+                f.write("%d\n" % val)
+                print(val)
+            f.close()
         # print("*****"+str(total_steps))
         return np.mean(total_loss), accuracy/float(total_steps)
 
